@@ -28,6 +28,7 @@ class DataService:
         """
         self.data_source = data_source or DataSourceFactory.create_data_source()
         self.repository = repository or RepositoryFactory.create_repository()
+        self.is_connected = False
     
     def connect(self) -> bool:
         """
@@ -43,7 +44,23 @@ class DataService:
             logger.error("環境変数 GARMIN_USERNAME および GARMIN_PASSWORD が設定されていません")
             return False
         
-        return self.data_source.connect(username, password)
+        success = self.data_source.connect(username, password)
+        if success:
+            self.is_connected = True
+        return success
+    
+    def ensure_connected(self) -> bool:
+        """
+        接続状態を確認し、必要に応じて再接続する
+        
+        Returns:
+            bool: 接続済みまたは再接続成功時はTrue
+        """
+        if self.is_connected:
+            return True
+        
+        logger.info("データソースに接続されていません。再接続を試みます...")
+        return self.connect()
     
     def fetch_and_save_data(self, start_date: date, end_date: date) -> bool:
         """
@@ -57,6 +74,11 @@ class DataService:
             bool: 処理成功時はTrue
         """
         logger.info(f"{start_date}から{end_date}までのデータを取得します")
+        
+        # 接続を確認・再接続
+        if not self.ensure_connected():
+            logger.error("データソースへの接続に失敗しました")
+            return False
         
         # RHRデータを取得・保存
         rhr_success = self._fetch_and_save_rhr(start_date, end_date)
