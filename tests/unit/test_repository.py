@@ -221,8 +221,8 @@ class TestRepository:
         _, Session = temp_db
         repo = SQLiteRepository(Session)
         
-        # 2週間分のテストデータを作成（2023/1/1は月曜日と仮定）
-        start_date = datetime(2023, 1, 1)  # 月曜日
+        # 2023年1月2日は月曜日 - 週の開始日に合わせてテストデータを作成
+        start_date = datetime(2023, 1, 2)  # 月曜日
         
         # 日別データを保存
         for i in range(14):  # 2週間分
@@ -280,7 +280,8 @@ class TestRepository:
         """RepositoryFactoryのテスト"""
         # データベースパスを一時的に変更
         with patch('os.environ.get', return_value='sqlite:///test.db'):
-            with patch('app.models.database_models.init_db') as mock_init_db:
+            # 正しいモックパスで init_db をモック化
+            with patch('app.repository.repository_factory.init_db') as mock_init_db:
                 mock_init_db.return_value = (None, MagicMock())
                 
                 repo = RepositoryFactory.create_repository()

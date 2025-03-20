@@ -111,31 +111,38 @@ class TestDataSource:
     
     def test_garmin_data_source_connect_fail(self):
         """GarminDataSourceの接続失敗をテスト"""
-        with patch('garminconnect.Garmin') as mock_garmin:
+        # 全体のパスを適切にモック化
+        with patch('app.data_source.garmin_data_source.Garmin') as mock_garmin:
             # ログイン失敗を模擬
-            mock_client = MagicMock()
-            mock_client.login.side_effect = Exception("Login failed")
-            mock_garmin.return_value = mock_client
+            mock_instance = MagicMock()
+            mock_instance.login.side_effect = Exception("Login failed")
+            mock_garmin.return_value = mock_instance
             
             garmin_ds = GarminDataSource()
             result = garmin_ds.connect("user", "wrong_pass")
             
             assert result == False
             assert garmin_ds.is_connected == False
+            mock_garmin.assert_called_once_with("user", "wrong_pass")
+            mock_instance.login.assert_called_once()
     
     def test_garmin_data_source_connect_success(self):
         """GarminDataSourceの接続成功をテスト"""
-        with patch('garminconnect.Garmin') as mock_garmin:
+        # 全体のパスを適切にモック化
+        with patch('app.data_source.garmin_data_source.Garmin') as mock_garmin:
             # ログイン成功を模擬
-            mock_client = MagicMock()
-            mock_garmin.return_value = mock_client
+            mock_instance = MagicMock()
+            # login()が成功するようにする（例外を発生させない）
+            mock_instance.login.return_value = None
+            mock_garmin.return_value = mock_instance
             
             garmin_ds = GarminDataSource()
             result = garmin_ds.connect("user", "pass")
             
             assert result == True
             assert garmin_ds.is_connected == True
-            mock_client.login.assert_called_once()
+            mock_garmin.assert_called_once_with("user", "pass")
+            mock_instance.login.assert_called_once()
     
     def test_garmin_data_source_get_data_without_connection(self):
         """接続せずにデータ取得を試みた場合のテスト"""
