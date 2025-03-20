@@ -7,16 +7,9 @@ services:
       - "8501:8501"
     volumes:
       - .:/app
+      - ./data:/app/data  # SQLiteファイルを保存するデータディレクトリをマウント
     environment:
       - GARMIN_USERNAME=${GARMIN_USERNAME}
       - GARMIN_PASSWORD=${GARMIN_PASSWORD}
-    depends_on:
-      - db
     command: streamlit run app/main.py
-    restart: unless-stopped
-
-  db:
-    image: sqlite:latest
-    volumes:
-      - ./data:/data
     restart: unless-stopped

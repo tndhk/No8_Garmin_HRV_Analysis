@@ -1,3 +1,11 @@
+import sys
+import os
+from pathlib import Path
+
+# プロジェクトのルートディレクトリをPATHに追加
+project_root = str(Path(__file__).parent.parent)
+sys.path.insert(0, project_root)
+
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go

@@ -1,4 +1,4 @@
-python-garminconnect==0.1.21
+git+https://github.com/cyberjunky/python-garminconnect.git
 pandas==2.1.0
 numpy==1.24.3
 streamlit==1.27.0
