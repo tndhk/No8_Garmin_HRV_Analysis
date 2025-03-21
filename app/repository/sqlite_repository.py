@@ -9,6 +9,17 @@ from app.models.database_models import RHRRecord, HRVRecord, ActivityRecord
 
 logger = logging.getLogger(__name__)
 
+import logging
+from datetime import date, datetime, timedelta
+from typing import List, Optional, Dict, Any
+from sqlalchemy.orm import Session
+
+from app.repository.repository_interface import RepositoryInterface
+from app.models.models import RHRData, HRVData, Activity, DailyData, WeeklyData
+from app.models.database_models import RHRRecord, HRVRecord, ActivityRecord
+
+logger = logging.getLogger(__name__)
+
 class SQLiteRepository(RepositoryInterface):
     """
     SQLiteを使用したリポジトリの実装
@@ -35,31 +46,46 @@ class SQLiteRepository(RepositoryInterface):
         """
         try:
             with self.session_factory() as session:
+                # デバッグ情報の追加
+                logger.info(f"保存するRHRデータ数: {len(rhr_data)}")
+                
+                record_count = 0
+                update_count = 0
+                null_count = 0
+                
                 for data in rhr_data:
                     if data.rhr is None:
-                        continue
+                        null_count += 1
+                        # Noneのデータはスキップせず保存する
+                        logger.debug(f"RHR値がNullのデータ: {data.date}")
+                    
+                    # 日付をdate型に変換
+                    date_value = data.date.date() if isinstance(data.date, datetime) else data.date
                     
                     # 既存レコードを検索
                     existing = session.query(RHRRecord).filter(
-                        RHRRecord.date == data.date.date()
+                        RHRRecord.date == date_value
                     ).first()
                     
                     if existing:
                         # 既存レコードを更新
                         existing.rhr = data.rhr
+                        update_count += 1
                     else:
                         # 新規レコードを作成
                         record = RHRRecord(
-                            date=data.date.date(),
+                            date=date_value,
                             rhr=data.rhr
                         )
                         session.add(record)
+                        record_count += 1
                 
                 session.commit()
-            return True
+                logger.info(f"RHRデータの保存結果: 新規={record_count}, 更新={update_count}, Null値={null_count}")
+                return True
         
         except Exception as e:
-            logger.error(f"RHRデータ保存中にエラーが発生しました: {str(e)}")
+            logger.error(f"RHRデータ保存中にエラーが発生しました: {str(e)}", exc_info=True)
             return False
     
     def save_hrv_data(self, hrv_data: List[HRVData]) -> bool:
@@ -74,33 +100,48 @@ class SQLiteRepository(RepositoryInterface):
         """
         try:
             with self.session_factory() as session:
+                # デバッグ情報の追加
+                logger.info(f"保存するHRVデータ数: {len(hrv_data)}")
+                
+                record_count = 0
+                update_count = 0
+                null_count = 0
+                
                 for data in hrv_data:
                     if data.hrv is None:
-                        continue
+                        null_count += 1
+                        # Noneのデータはスキップせず保存する
+                        logger.debug(f"HRV値がNullのデータ: {data.date}")
+                    
+                    # 日付をdate型に変換
+                    date_value = data.date.date() if isinstance(data.date, datetime) else data.date
                     
                     # 既存レコードを検索
                     existing = session.query(HRVRecord).filter(
-                        HRVRecord.date == data.date.date()
+                        HRVRecord.date == date_value
                     ).first()
                     
                     if existing:
                         # 既存レコードを更新
                         existing.hrv = data.hrv
+                        update_count += 1
                     else:
                         # 新規レコードを作成
                         record = HRVRecord(
-                            date=data.date.date(),
+                            date=date_value,
                             hrv=data.hrv
                         )
                         session.add(record)
+                        record_count += 1
                 
                 session.commit()
-            return True
+                logger.info(f"HRVデータの保存結果: 新規={record_count}, 更新={update_count}, Null値={null_count}")
+                return True
         
         except Exception as e:
-            logger.error(f"HRVデータ保存中にエラーが発生しました: {str(e)}")
+            logger.error(f"HRVデータ保存中にエラーが発生しました: {str(e)}", exc_info=True)
             return False
-    
+        
     def save_activities(self, activities: List[Activity]) -> bool:
         """
         アクティビティデータを保存する

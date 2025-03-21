@@ -1,6 +1,9 @@
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from dataclasses import dataclass
+import logging
+
+logger = logging.getLogger(__name__)
 
 @dataclass
 class RHRData:
@@ -11,11 +14,36 @@ class RHRData:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'RHRData':
         """辞書からインスタンスを生成する"""
-        date_obj = datetime.fromisoformat(data['date']) if isinstance(data['date'], str) else data['date']
-        return cls(
-            date=date_obj,
-            rhr=data.get('rhr')
-        )
+        try:
+            date_obj = datetime.fromisoformat(data['date']) if isinstance(data['date'], str) else data['date']
+            rhr_value = data.get('rhr')
+            
+            # RHR値のバリデーション
+            if rhr_value is not None:
+                try:
+                    rhr_value = int(rhr_value)  # 確実に整数に変換
+                    
+                    # 現実的な範囲かチェック
+                    if rhr_value < 30 or rhr_value > 150:
+                        logger.warning(f"現実的ではないRHR値: {rhr_value}, 日付: {date_obj}")
+                except (ValueError, TypeError):
+                    logger.warning(f"RHR値を整数に変換できません: {rhr_value}, 日付: {date_obj}")
+                    rhr_value = None
+            
+            return cls(
+                date=date_obj,
+                rhr=rhr_value
+            )
+        except Exception as e:
+            logger.error(f"RHRDataの変換中にエラーが発生しました: {str(e)}, データ: {data}")
+            # 最低限必要なデータで作成
+            if 'date' in data:
+                try:
+                    date_obj = datetime.fromisoformat(data['date']) if isinstance(data['date'], str) else data['date']
+                    return cls(date=date_obj, rhr=None)
+                except:
+                    pass
+            raise
 
 
 @dataclass
@@ -27,11 +55,36 @@ class HRVData:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'HRVData':
         """辞書からインスタンスを生成する"""
-        date_obj = datetime.fromisoformat(data['date']) if isinstance(data['date'], str) else data['date']
-        return cls(
-            date=date_obj,
-            hrv=data.get('hrv')
-        )
+        try:
+            date_obj = datetime.fromisoformat(data['date']) if isinstance(data['date'], str) else data['date']
+            hrv_value = data.get('hrv')
+            
+            # HRV値のバリデーション
+            if hrv_value is not None:
+                try:
+                    hrv_value = float(hrv_value)  # 確実に浮動小数点に変換
+                    
+                    # 現実的な範囲かチェック
+                    if hrv_value < 10 or hrv_value > 150:
+                        logger.warning(f"現実的ではないHRV値: {hrv_value}, 日付: {date_obj}")
+                except (ValueError, TypeError):
+                    logger.warning(f"HRV値を浮動小数点に変換できません: {hrv_value}, 日付: {date_obj}")
+                    hrv_value = None
+            
+            return cls(
+                date=date_obj,
+                hrv=hrv_value
+            )
+        except Exception as e:
+            logger.error(f"HRVDataの変換中にエラーが発生しました: {str(e)}, データ: {data}")
+            # 最低限必要なデータで作成
+            if 'date' in data:
+                try:
+                    date_obj = datetime.fromisoformat(data['date']) if isinstance(data['date'], str) else data['date']
+                    return cls(date=date_obj, hrv=None)
+                except:
+                    pass
+            raise
 
 
 @dataclass
@@ -59,17 +112,22 @@ class Activity:
     @classmethod
     def from_dict(cls, date: datetime, data: Dict[str, Any]) -> 'Activity':
         """辞書からインスタンスを生成する"""
-        start_time = datetime.fromisoformat(data['start_time']) if isinstance(data['start_time'], str) else data['start_time']
-        return cls(
-            activity_id=data['activity_id'],
-            date=date,
-            activity_type=data['activity_type'],
-            start_time=start_time,
-            duration=data['duration'],
-            distance=data.get('distance'),
-            is_l2_training=data.get('is_l2_training', False),
-            intensity=data.get('intensity', 'Other')
-        )
+        try:
+            start_time = datetime.fromisoformat(data['start_time']) if isinstance(data['start_time'], str) else data['start_time']
+            
+            return cls(
+                activity_id=data['activity_id'],
+                date=date,
+                activity_type=data['activity_type'],
+                start_time=start_time,
+                duration=data['duration'],
+                distance=data.get('distance'),
+                is_l2_training=data.get('is_l2_training', False),
+                intensity=data.get('intensity', 'Other')
+            )
+        except Exception as e:
+            logger.error(f"Activityの変換中にエラーが発生しました: {str(e)}, データ: {data}")
+            raise
 
 
 @dataclass

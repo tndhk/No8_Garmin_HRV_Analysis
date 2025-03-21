@@ -44,9 +44,13 @@ class DataService:
             logger.error("環境変数 GARMIN_USERNAME および GARMIN_PASSWORD が設定されていません")
             return False
         
+        logger.info(f"データソースに接続します: username={username}")
         success = self.data_source.connect(username, password)
         if success:
             self.is_connected = True
+            logger.info("データソースへの接続に成功しました")
+        else:
+            logger.error("データソースへの接続に失敗しました")
         return success
     
     def ensure_connected(self) -> bool:
@@ -57,6 +61,7 @@ class DataService:
             bool: 接続済みまたは再接続成功時はTrue
         """
         if self.is_connected:
+            logger.debug("データソースに既に接続されています")
             return True
         
         logger.info("データソースに接続されていません。再接続を試みます...")
@@ -89,7 +94,13 @@ class DataService:
         # トレーニングデータを取得・保存
         training_success = self._fetch_and_save_training(start_date, end_date)
         
-        return rhr_success and hrv_success and training_success
+        overall_success = rhr_success and hrv_success and training_success
+        if overall_success:
+            logger.info("すべてのデータの取得・保存が完了しました")
+        else:
+            logger.error("一部のデータの取得・保存に失敗しました")
+            
+        return overall_success
     
     def _fetch_and_save_rhr(self, start_date: date, end_date: date) -> bool:
         """RHRデータを取得して保存する"""
@@ -99,8 +110,25 @@ class DataService:
             
             logger.info(f"{len(rhr_data_dict)}件のRHRデータを取得しました")
             
+            # データの内容をサンプル表示（最初の3件）
+            for i, data in enumerate(rhr_data_dict[:3]):
+                logger.info(f"RHRデータサンプル{i+1}: {data}")
+            
             # 辞書型からモデルに変換
-            rhr_data = [RHRData.from_dict(data) for data in rhr_data_dict]
+            rhr_data = []
+            for data in rhr_data_dict:
+                try:
+                    rhr_model = RHRData.from_dict(data)
+                    # NULL値チェック
+                    if rhr_model.rhr is None:
+                        logger.warning(f"RHR値がNULLのデータがあります: {data}")
+                    rhr_data.append(rhr_model)
+                except Exception as e:
+                    logger.error(f"RHRデータの変換中にエラーが発生しました: {str(e)}, データ: {data}")
+            
+            # 変換後のデータをサンプル表示
+            for i, data in enumerate(rhr_data[:3]):
+                logger.info(f"変換後のRHRデータサンプル{i+1}: date={data.date}, rhr={data.rhr}")
             
             logger.info("RHRデータを保存しています...")
             success = self.repository.save_rhr_data(rhr_data)
@@ -113,7 +141,7 @@ class DataService:
             return success
             
         except Exception as e:
-            logger.error(f"RHRデータの取得・保存中にエラーが発生しました: {str(e)}")
+            logger.error(f"RHRデータの取得・保存中にエラーが発生しました: {str(e)}", exc_info=True)
             return False
     
     def _fetch_and_save_hrv(self, start_date: date, end_date: date) -> bool:
@@ -124,8 +152,25 @@ class DataService:
             
             logger.info(f"{len(hrv_data_dict)}件のHRVデータを取得しました")
             
+            # データの内容をサンプル表示（最初の3件）
+            for i, data in enumerate(hrv_data_dict[:3]):
+                logger.info(f"HRVデータサンプル{i+1}: {data}")
+            
             # 辞書型からモデルに変換
-            hrv_data = [HRVData.from_dict(data) for data in hrv_data_dict]
+            hrv_data = []
+            for data in hrv_data_dict:
+                try:
+                    hrv_model = HRVData.from_dict(data)
+                    # NULL値チェック
+                    if hrv_model.hrv is None:
+                        logger.warning(f"HRV値がNULLのデータがあります: {data}")
+                    hrv_data.append(hrv_model)
+                except Exception as e:
+                    logger.error(f"HRVデータの変換中にエラーが発生しました: {str(e)}, データ: {data}")
+            
+            # 変換後のデータをサンプル表示
+            for i, data in enumerate(hrv_data[:3]):
+                logger.info(f"変換後のHRVデータサンプル{i+1}: date={data.date}, hrv={data.hrv}")
             
             logger.info("HRVデータを保存しています...")
             success = self.repository.save_hrv_data(hrv_data)
@@ -138,7 +183,7 @@ class DataService:
             return success
             
         except Exception as e:
-            logger.error(f"HRVデータの取得・保存中にエラーが発生しました: {str(e)}")
+            logger.error(f"HRVデータの取得・保存中にエラーが発生しました: {str(e)}", exc_info=True)
             return False
     
     def _fetch_and_save_training(self, start_date: date, end_date: date) -> bool:
@@ -155,10 +200,17 @@ class DataService:
                 date_obj = datetime.fromisoformat(day_data['date']) if isinstance(day_data['date'], str) else day_data['date']
                 
                 for activity_data in day_data.get('activities', []):
-                    activity = Activity.from_dict(date_obj, activity_data)
-                    activities.append(activity)
+                    try:
+                        activity = Activity.from_dict(date_obj, activity_data)
+                        activities.append(activity)
+                    except Exception as e:
+                        logger.error(f"アクティビティデータの変換中にエラーが発生しました: {str(e)}, データ: {activity_data}")
             
             logger.info(f"合計{len(activities)}件のアクティビティを抽出しました")
+            
+            # アクティビティデータのサンプル表示
+            for i, activity in enumerate(activities[:3]):
+                logger.info(f"アクティビティサンプル{i+1}: date={activity.date}, type={activity.activity_type}, is_l2={activity.is_l2_training}")
             
             if activities:
                 logger.info("トレーニングデータを保存しています...")
@@ -175,7 +227,7 @@ class DataService:
                 return True
             
         except Exception as e:
-            logger.error(f"トレーニングデータの取得・保存中にエラーが発生しました: {str(e)}")
+            logger.error(f"トレーニングデータの取得・保存中にエラーが発生しました: {str(e)}", exc_info=True)
             return False
     
     def get_daily_data(self, start_date: date, end_date: date) -> List[DailyData]:
@@ -189,7 +241,10 @@ class DataService:
         Returns:
             List[DailyData]: 日別データのリスト
         """
-        return self.repository.get_daily_data(start_date, end_date)
+        logger.info(f"{start_date}から{end_date}までの日別データを取得します")
+        daily_data = self.repository.get_daily_data(start_date, end_date)
+        logger.info(f"{len(daily_data)}件の日別データを取得しました")
+        return daily_data
     
     def get_weekly_data(self, start_date: date, end_date: date) -> List[WeeklyData]:
         """
@@ -202,4 +257,7 @@ class DataService:
         Returns:
             List[WeeklyData]: 週別データのリスト
         """
-        return self.repository.get_weekly_data(start_date, end_date)
+        logger.info(f"{start_date}から{end_date}までの週別データを取得します")
+        weekly_data = self.repository.get_weekly_data(start_date, end_date)
+        logger.info(f"{len(weekly_data)}件の週別データを取得しました")
+        return weekly_data
