@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from datetime import date, datetime
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 
 from app.models.models import RHRData, HRVData, Activity, DailyData, WeeklyData
 
@@ -115,5 +115,26 @@ class RepositoryInterface(ABC):
             
         Returns:
             List[WeeklyData]: 週別データのリスト
+        """
+        pass
+    
+    @abstractmethod
+    def has_data(self) -> bool:
+        """
+        データが存在するかどうかを確認する
+        
+        Returns:
+            bool: データが存在する場合はTrue
+        """
+        pass
+    
+    @abstractmethod
+    def get_data_date_range(self) -> Tuple[Optional[date], Optional[date]]:
+        """
+        保存されているデータの日付範囲を取得する
+        
+        Returns:
+            Tuple[Optional[date], Optional[date]]: (最古の日付, 最新の日付)のタプル、
+                                                 データがない場合は(None, None)
         """
         pass

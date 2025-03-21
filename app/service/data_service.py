@@ -261,3 +261,51 @@ class DataService:
         weekly_data = self.repository.get_weekly_data(start_date, end_date)
         logger.info(f"{len(weekly_data)}件の週別データを取得しました")
         return weekly_data
+    
+    def has_data(self) -> bool:
+        """
+        データが存在するかどうかを確認する
+        
+        Returns:
+            bool: データが存在する場合はTrue
+        """
+        return self.repository.has_data()
+    
+    def get_data_date_range(self) -> Tuple[Optional[date], Optional[date]]:
+        """
+        保存されているデータの日付範囲を取得する
+        
+        Returns:
+            Tuple[Optional[date], Optional[date]]: (最古の日付, 最新の日付)のタプル、
+                                                 データがない場合は(None, None)
+        """
+        return self.repository.get_data_date_range()
+    
+    def fetch_missing_data(self) -> bool:
+        """
+        最後のデータ以降のデータを取得する
+        
+        Returns:
+            bool: 処理成功時はTrue
+        """
+        # 現在のデータ範囲を取得
+        start_date, end_date = self.get_data_date_range()
+        
+        if end_date is None:
+            # データがない場合、デフォルトの期間で取得
+            today = date.today()
+            start_date = today - timedelta(days=180)  # 半年分
+            end_date = today
+        else:
+            # 最後のデータの翌日から今日までを取得
+            start_date = end_date + timedelta(days=1)
+            end_date = date.today()
+            
+            # 既に最新の場合はスキップ
+            if start_date > end_date:
+                logger.info("データは既に最新です")
+                return True
+        
+        # データ取得と保存
+        logger.info(f"不足データ（{start_date}から{end_date}まで）を取得します")
+        return self.fetch_and_save_data(start_date, end_date)

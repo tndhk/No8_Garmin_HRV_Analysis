@@ -49,6 +49,18 @@ if 'daily_df' not in st.session_state:
 if 'weekly_df' not in st.session_state:
     st.session_state.weekly_df = None
 
+if 'data_start_date' not in st.session_state:
+    st.session_state.data_start_date = None
+
+if 'data_end_date' not in st.session_state:
+    st.session_state.data_end_date = None
+
+if 'display_start_date' not in st.session_state:
+    st.session_state.display_start_date = None
+
+if 'display_end_date' not in st.session_state:
+    st.session_state.display_end_date = None
+
 def authenticate():
     """ユーザー認証とデータソース接続を行う"""
     st.subheader("Garmin Connect認証")
@@ -74,9 +86,88 @@ def authenticate():
                 else:
                     st.error("Garmin Connectへの接続に失敗しました。ユーザー名とパスワードを確認してください。")
 
-def fetch_data():
-    """データ取得と保存を行う"""
-    st.subheader("データ取得")
+def check_existing_data():
+    """既存データの確認とロード"""
+    try:
+        has_data = data_service.has_data()
+        
+        if has_data:
+            # データ範囲を取得
+            start_date, end_date = data_service.get_data_date_range()
+            st.session_state.data_start_date = start_date
+            st.session_state.data_end_date = end_date
+            
+            if start_date and end_date:
+                # 直近30日間のデータを表示
+                display_end_date = end_date
+                display_start_date = max(start_date, end_date - timedelta(days=30))
+                
+                # 表示期間を保存
+                st.session_state.display_start_date = display_start_date
+                st.session_state.display_end_date = display_end_date
+                
+                # データロード
+                load_and_analyze_data(display_start_date, display_end_date)
+                
+                # データ読み込み状態をセット
+                st.session_state.data_loaded = True
+                
+                return True
+            else:
+                st.warning("データ日付範囲の取得に失敗しました。")
+        
+        return False
+    except Exception as e:
+        st.error(f"既存データのチェック中にエラーが発生しました: {str(e)}")
+        return False
+
+def select_data_action():
+    """データ取得方法の選択画面"""
+    st.title("Garmin HRV/RHR データ管理")
+    
+    # データが既に存在する場合は、その情報を表示
+    if data_service.has_data():
+        start_date, end_date = data_service.get_data_date_range()
+        st.info(f"既存データ期間: {start_date} から {end_date}")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("既存データを表示", key="show_existing"):
+                # 既存データをロード
+                st.session_state.data_loaded = True
+                # 直近180日間のデータを表示
+                display_end_date = end_date
+                display_start_date = max(start_date, end_date - timedelta(days=180))
+                # 表示期間を保存
+                st.session_state.display_start_date = display_start_date
+                st.session_state.display_end_date = display_end_date
+                load_and_analyze_data(display_start_date, display_end_date)
+                st.experimental_rerun()
+        
+        with col2:
+            if st.button("最新データを取得", key="fetch_new"):
+                with st.spinner("最新データを取得中..."):
+                    success = data_service.fetch_missing_data()
+                    if success:
+                        st.success("最新データを取得しました")
+                        # 更新された日付範囲を取得
+                        new_start_date, new_end_date = data_service.get_data_date_range()
+                        st.session_state.data_start_date = new_start_date
+                        st.session_state.data_end_date = new_end_date
+                        # 直近180日間のデータを表示
+                        display_end_date = new_end_date
+                        display_start_date = max(new_start_date, new_end_date - timedelta(days=180))
+                        # 表示期間を保存
+                        st.session_state.display_start_date = display_start_date
+                        st.session_state.display_end_date = display_end_date
+                        load_and_analyze_data(display_start_date, display_end_date)
+                        st.session_state.data_loaded = True
+                        st.experimental_rerun()
+                    else:
+                        st.error("データ取得中にエラーが発生しました")
+    
+    st.subheader("カスタムデータ取得")
     
     # 期間の選択
     col1, col2 = st.columns(2)
@@ -95,6 +186,11 @@ def fetch_data():
             if success:
                 st.success("データの取得・保存が完了しました")
                 st.session_state.data_loaded = True
+                # 日付範囲を更新
+                st.session_state.data_start_date, st.session_state.data_end_date = data_service.get_data_date_range()
+                # 表示期間を設定
+                st.session_state.display_start_date = start_date
+                st.session_state.display_end_date = end_date
                 load_and_analyze_data(start_date, end_date)
                 st.experimental_rerun()
             else:
@@ -131,19 +227,44 @@ def visualize_data():
         min_date = st.session_state.daily_df.index.min().date()
         max_date = st.session_state.daily_df.index.max().date()
         
+        # 期間プリセットボタン
+        st.sidebar.subheader("期間プリセット")
+        col1, col2, col3 = st.sidebar.columns(3)
+        
+        if col1.button("最新30日", key="last30"):
+            st.session_state.display_start_date = max(min_date, max_date - timedelta(days=30))
+            st.session_state.display_end_date = max_date
+            st.experimental_rerun()
+            
+        if col2.button("最新90日", key="last90"):
+            st.session_state.display_start_date = max(min_date, max_date - timedelta(days=90))
+            st.session_state.display_end_date = max_date
+            st.experimental_rerun()
+            
+        if col3.button("全期間", key="alltime"):
+            st.session_state.display_start_date = min_date
+            st.session_state.display_end_date = max_date
+            st.experimental_rerun()
+        
+        # 日付選択ウィジェット - セッション状態の値を使用
         start_date = st.sidebar.date_input(
             "開始日", 
-            value=min_date,
+            value=st.session_state.display_start_date,
             min_value=min_date,
             max_value=max_date
         )
         
         end_date = st.sidebar.date_input(
             "終了日", 
-            value=max_date,
+            value=st.session_state.display_end_date,
             min_value=start_date,
             max_value=max_date
         )
+        
+        # 日付が変更された場合、セッション状態を更新
+        if start_date != st.session_state.display_start_date or end_date != st.session_state.display_end_date:
+            st.session_state.display_start_date = start_date
+            st.session_state.display_end_date = end_date
         
         # データをフィルタリング
         mask = (st.session_state.daily_df.index.date >= start_date) & \
@@ -157,6 +278,10 @@ def visualize_data():
             filtered_weekly_df = st.session_state.weekly_df[mask]
         else:
             filtered_weekly_df = pd.DataFrame()
+        
+        # データ範囲情報の表示
+        st.sidebar.info(f"データ全期間: {min_date} ~ {max_date}")
+        st.sidebar.info(f"表示期間: {len(filtered_daily_df)}日間のデータ")
         
         # タブの作成
         tab1, tab2, tab3, tab4 = st.tabs([
@@ -280,10 +405,31 @@ def visualize_data():
     else:
         st.info("分析するデータがありません。「データ取得」を行ってください。")
     
-    # データ更新ボタン
+    # データ管理セクション
     st.sidebar.subheader("データ管理")
-    if st.sidebar.button("データを再取得"):
+    col1, col2 = st.sidebar.columns(2)
+    
+    # 最新データを取得ボタン
+    if col1.button("最新データを取得", key="get_latest"):
+        # サイドバーではなくメイン画面にスピナーを表示
+        with st.spinner("最新データを取得中..."):
+            success = data_service.fetch_missing_data()
+            if success:
+                # データ範囲を更新
+                new_start, new_end = data_service.get_data_date_range()
+                # 最新データを読み込み
+                load_and_analyze_data(new_start, new_end)
+                st.success("最新データを取得しました")
+                st.experimental_rerun()
+            else:
+                st.error("データ取得中にエラーが発生しました")
+    
+    # カスタムデータ取得ボタン            
+    if col2.button("カスタムデータ取得", key="custom_fetch"):
+        # 明示的にセッション状態をリセット
         st.session_state.data_loaded = False
+        st.info("カスタムデータ取得画面に移動します...")
+        time.sleep(1)  # 情報メッセージを表示するための短い遅延
         st.experimental_rerun()
 
 def main():
@@ -298,15 +444,31 @@ def main():
     # サイドバーにタイトルを表示
     st.sidebar.title("Garmin HRV/RHR分析")
     
+    # デバッグ情報（開発中のみ表示）
+    # st.sidebar.write(f"認証状態: {st.session_state.is_authenticated}")
+    # st.sidebar.write(f"データロード状態: {st.session_state.data_loaded}")
+    
     # 認証状態に応じて表示を切り替え
     if not st.session_state.is_authenticated:
         authenticate()
         
     elif not st.session_state.data_loaded:
-        fetch_data()
-        
+        # まず既存データをチェック
+        if not check_existing_data():
+            # 既存データがなければデータ取得画面を表示
+            select_data_action()
+        else:
+            # 既存データがあればビジュアライズへ
+            st.experimental_rerun()
     else:
         visualize_data()
+        
+    # セッションリセットボタン（デバッグ用）
+    if st.sidebar.button("画面をリセット", key="reset_view"):
+        # すべての関連セッション状態をクリア
+        if 'data_loaded' in st.session_state:
+            st.session_state.data_loaded = False
+        st.experimental_rerun()
 
 if __name__ == "__main__":
     main()

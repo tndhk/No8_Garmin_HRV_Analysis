@@ -1,18 +1,8 @@
 import logging
 from datetime import date, datetime, timedelta
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 from sqlalchemy.orm import Session
-
-from app.repository.repository_interface import RepositoryInterface
-from app.models.models import RHRData, HRVData, Activity, DailyData, WeeklyData
-from app.models.database_models import RHRRecord, HRVRecord, ActivityRecord
-
-logger = logging.getLogger(__name__)
-
-import logging
-from datetime import date, datetime, timedelta
-from typing import List, Optional, Dict, Any
-from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from app.repository.repository_interface import RepositoryInterface
 from app.models.models import RHRData, HRVData, Activity, DailyData, WeeklyData
@@ -373,3 +363,70 @@ class SQLiteRepository(RepositoryInterface):
             current_week_start += timedelta(days=7)
         
         return weekly_data
+    
+    def has_data(self) -> bool:
+        """
+        データが存在するかどうかを確認する
+        
+        Returns:
+            bool: データが存在する場合はTrue
+        """
+        try:
+            with self.session_factory() as session:
+                # RHRデータの存在確認
+                rhr_count = session.query(func.count(RHRRecord.id)).scalar()
+                if rhr_count > 0:
+                    return True
+                
+                # HRVデータの存在確認
+                hrv_count = session.query(func.count(HRVRecord.id)).scalar()
+                if hrv_count > 0:
+                    return True
+                
+                # アクティビティデータの存在確認
+                activity_count = session.query(func.count(ActivityRecord.id)).scalar()
+                if activity_count > 0:
+                    return True
+                
+                return False
+        
+        except Exception as e:
+            logger.error(f"データ存在確認中にエラーが発生しました: {str(e)}")
+            return False
+    
+    def get_data_date_range(self) -> Tuple[Optional[date], Optional[date]]:
+        """
+        保存されているデータの日付範囲を取得する
+        
+        Returns:
+            Tuple[Optional[date], Optional[date]]: (最古の日付, 最新の日付)のタプル、
+                                                 データがない場合は(None, None)
+        """
+        try:
+            with self.session_factory() as session:
+                # 各テーブルの最小日付と最大日付を取得
+                min_rhr_date = session.query(func.min(RHRRecord.date)).scalar()
+                max_rhr_date = session.query(func.max(RHRRecord.date)).scalar()
+                
+                min_hrv_date = session.query(func.min(HRVRecord.date)).scalar()
+                max_hrv_date = session.query(func.max(HRVRecord.date)).scalar()
+                
+                min_activity_date = session.query(func.min(ActivityRecord.date)).scalar()
+                max_activity_date = session.query(func.max(ActivityRecord.date)).scalar()
+                
+                # すべてのNoneでない最小日付と最大日付を集める
+                min_dates = [d for d in [min_rhr_date, min_hrv_date, min_activity_date] if d is not None]
+                max_dates = [d for d in [max_rhr_date, max_hrv_date, max_activity_date] if d is not None]
+                
+                if not min_dates or not max_dates:
+                    return (None, None)
+                
+                # 最小の最小日付と最大の最大日付を求める
+                min_date = min(min_dates)
+                max_date = max(max_dates)
+                
+                return (min_date, max_date)
+        
+        except Exception as e:
+            logger.error(f"データ日付範囲取得中にエラーが発生しました: {str(e)}")
+            return (None, None)
